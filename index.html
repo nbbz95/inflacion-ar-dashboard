@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inflación Argentina</title>
+  <meta name="description" content="Dashboard de inflación de Argentina con datos del INDEC, actualizado automáticamente.">
+  <style>
+    :root { --fondo:#f6f7f9; --tarjeta:#fff; --texto:#1d2330; --suave:#5d6677; --borde:#dde1e8; --serie1:#2563eb; --serie2:#d97706; }
+    @media (prefers-color-scheme: dark) { :root { --fondo:#0f1115; --tarjeta:#181b21; --texto:#e7e9ee; --suave:#9aa3b2; --borde:#2a2f38; --serie1:#60a5fa; --serie2:#fbbf24; } }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,sans-serif; background:var(--fondo); color:var(--texto); }
+    main { max-width:1000px; margin:0 auto; padding:24px 16px 48px; }
+    h1 { margin:0; } .sub { color:var(--suave); margin-top:4px; }
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin:20px 0; }
+    .kpi, .panel { background:var(--tarjeta); border:1px solid var(--borde); border-radius:12px; padding:16px; }
+    .kpi span { color:var(--suave); font-size:.9rem; } .kpi strong { display:block; font-size:1.9rem; margin-top:4px; font-variant-numeric:tabular-nums; }
+    .panel { margin-top:16px; } .panel h2 { margin:0 0 12px; font-size:1.05rem; }
+    .lienzo { position:relative; height:320px; }
+    footer { color:var(--suave); font-size:.9rem; margin-top:24px; } a { color:var(--serie1); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Inflación en Argentina</h1>
+  <p class="sub" id="sub">Datos del IPC del INDEC.</p>
+  <div class="kpis">
+    <div class="kpi"><span>Último mes</span><strong id="k-mensual">–</strong></div>
+    <div class="kpi"><span>Interanual</span><strong id="k-interanual">–</strong></div>
+    <div class="kpi"><span>Acumulado del año</span><strong id="k-acumulado">–</strong></div>
+    <div class="kpi"><span>Pico mensual desde 2017</span><strong id="k-max">–</strong></div>
+  </div>
+  <section class="panel"><h2>Inflación mensual (%)</h2><div class="lienzo"><canvas id="g-mensual"></canvas></div></section>
+  <section class="panel"><h2>Inflación interanual (%)</h2><div class="lienzo"><canvas id="g-interanual"></canvas></div></section>
+  <section class="panel"><h2>Inflación por año calendario (%)</h2><div class="lienzo"><canvas id="g-anual"></canvas></div></section>
+  <footer>Fuente: INDEC vía <a href="https://argentinadatos.com">ArgentinaDatos</a>. Se actualiza solo con GitHub Actions. <a href="https://github.com/nbbz95/inflacion-ar-dashboard">Código</a>.</footer>
+</main>
+<script src="vendor/chart.umd.js"></script>
+<script>
+  const css = getComputedStyle(document.documentElement);
+  const color = (v) => css.getPropertyValue(v).trim();
+  const pct = (v) => `${v.toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`;
+  const mesLargo = (m) => new Date(`${m}-15`).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+  Chart.defaults.color = color('--suave');
+  Chart.defaults.borderColor = color('--borde');
+  Chart.defaults.font.family = 'system-ui, sans-serif';
+  const base = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, interaction: { mode: 'index', intersect: false } };
+
+  fetch('datos.json').then((r) => r.json()).then((d) => {
+    document.getElementById('sub').textContent = `Datos del IPC del INDEC hasta ${mesLargo(d.ultimo_mes)}.`;
+    document.getElementById('k-mensual').textContent = pct(d.kpis.mensual);
+    document.getElementById('k-interanual').textContent = pct(d.kpis.interanual);
+    document.getElementById('k-acumulado').textContent = pct(d.kpis.acumulado_anio);
+    document.getElementById('k-max').textContent = `${pct(d.kpis.max_mensual.valor)}`;
+    document.getElementById('k-max').title = mesLargo(d.kpis.max_mensual.mes);
+
+    const meses = d.serie.map((s) => s.mes);
+    new Chart(document.getElementById('g-mensual'), {
+      type: 'bar',
+      data: { labels: meses, datasets: [{ data: d.serie.map((s) => s.mensual), backgroundColor: color('--serie1'), borderRadius: 2 }] },
+      options: base,
+    });
+    new Chart(document.getElementById('g-interanual'), {
+      type: 'line',
+      data: { labels: meses, datasets: [{ data: d.serie.map((s) => s.interanual), borderColor: color('--serie2'), borderWidth: 2, pointRadius: 0, tension: 0.2 }] },
+      options: base,
+    });
+    new Chart(document.getElementById('g-anual'), {
+      type: 'bar',
+      data: { labels: d.anual.map((a) => a.anio), datasets: [{ data: d.anual.map((a) => a.inflacion), backgroundColor: color('--serie1'), borderRadius: 4 }] },
+      options: base,
+    });
+  });
+</script>
+</body>
+</html>
